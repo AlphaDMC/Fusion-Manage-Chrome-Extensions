@@ -11,10 +11,11 @@ import { TEMP_OPERATION_NAME_FIELD_ID, type BomCloneContext, type BomCloneNode, 
 import type { CloneService } from './service.contract'
 import { parseBooleanLike, resolvePinnedFieldId, resolveQuantityFieldId } from './field.service'
 import { resolveNodeItemId } from './structure/tree.service'
+import { isPartNode, buildDuplicatePlan } from './deepDuplicate.service'
 
 export type BomCloneMutationService = Pick<
   CloneService,
-  'createBomCloneOperationItem' | 'commitBomCloneItem' | 'updateBomCloneItem' | 'deleteBomCloneItem'
+  'createBomCloneOperationItem' | 'commitBomCloneItem' | 'updateBomCloneItem' | 'deleteBomCloneItem' | 'deepDuplicateSubtree'
 >
 
 export type CommitOperationCounts = {
@@ -560,8 +561,25 @@ export async function executeCommitOperations(params: {
         const quantityFallback = node.stagedOperationDraft ? '1.0' : DEFAULT_CLONE_QUANTITY
         const effectiveQuantity = String(snapshot.targetQuantityOverrides[node.id] ?? node.quantity ?? '').trim() || quantityFallback
         const commitQuantity = normalizeQuantity(effectiveQuantity, quantityFallback)
-        const sourceItemId = resolveNumericItemIdFromNode(node)
-        if (!sourceItemId || sourceItemId <= 0) throw new Error(`Unable to resolve source item id for ${node.label || node.id}`)
+        let sourceItemId: number
+
+        if (snapshot.deepDuplicateEnabled && !isPartNode(node)) {
+          // Deep duplicate path: create a copy of the subtree rooted at this node.
+          const plan = buildDuplicatePlan([node])[0]
+          if (!plan) throw new Error(`Failed to build duplicate plan for node: ${node.label}`)
+          sourceItemId = await dataService.deepDuplicateSubtree(
+            activeContext,
+            plan,
+            snapshot.projectReferenceFieldId,
+            snapshot.projectReference
+          )
+        } else {
+          // Reference path (original behaviour).
+          const resolved = resolveNumericItemIdFromNode(node)
+          if (!resolved || resolved <= 0) throw new Error(`Unable to resolve source item id for ${node.label || node.id}`)
+          sourceItemId = resolved
+        }
+
         const parentItemId = resolveManufacturingParentItemId({
           snapshot,
           node,
