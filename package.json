@@ -8,7 +8,8 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "check:boundaries": "node scripts/check-boundaries.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -21,7 +22,8 @@
     "@vitejs/plugin-react": "^5.1.1",
     "esbuild": "^0.27.3",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^4.1.0"
   },
   "overrides": {
     "rollup": "^4.59.0"
