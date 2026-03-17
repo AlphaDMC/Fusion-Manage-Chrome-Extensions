@@ -570,8 +570,7 @@ export async function executeCommitOperations(params: {
           sourceItemId = await dataService.deepDuplicateSubtree(
             activeContext,
             plan,
-            snapshot.projectReferenceFieldId,
-            snapshot.projectReference
+            snapshot.projectId
           )
         } else {
           // Reference path (original behaviour).

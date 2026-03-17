@@ -35,8 +35,7 @@ export type CloneService = {
   deepDuplicateSubtree: (
     context: BomCloneContext,
     plan: DuplicatePlanNode,
-    projectReferenceFieldId: string,
-    projectReference: string
+    projectId: string
   ) => Promise<number>
   createBomCloneOperationItem: (
     context: BomCloneContext,

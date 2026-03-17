@@ -494,12 +494,8 @@ export function createCloneController(runtime: CloneRuntime): CloneController {
         state.setDeepDuplicateEnabled(enabled)
         render()
       },
-      onProjectReferenceFieldIdChange(fieldId: string) {
-        state.setProjectReferenceFieldId(fieldId)
-        render()
-      },
-      onProjectReferenceChange(value: string) {
-        state.setProjectReference(value)
+      onProjectIdChange(value: string) {
+        state.setProjectId(value)
         render()
       }
     }

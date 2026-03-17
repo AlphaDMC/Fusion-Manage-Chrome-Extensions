@@ -4,8 +4,7 @@ import { buildDuplicatePlan, countDuplicateOperations } from '../../services/dee
 
 export type DeepDuplicatePanelHandlers = {
   onToggleDeepDuplicate: (enabled: boolean) => void
-  onProjectReferenceFieldIdChange: (fieldId: string) => void
-  onProjectReferenceChange: (value: string) => void
+  onProjectIdChange: (value: string) => void
 }
 
 export type DeepDuplicatePanelProps = {
@@ -25,12 +24,11 @@ function countRefNodes(nodes: ReturnType<typeof buildDuplicatePlan>): number {
 export function DeepDuplicatePanel(props: DeepDuplicatePanelProps): React.JSX.Element {
   const { snapshot, handlers } = props
 
-  // Use the staged target BOM tree to count what will be duplicated.
-  // (These are the nodes the user has dragged into the target.)
   const stagedNodes = snapshot.targetBomTree
   const plan = buildDuplicatePlan(stagedNodes)
   const duplicateCount = countDuplicateOperations(plan)
   const totalRefCount = countRefNodes(plan)
+  const sanitizedPreview = snapshot.projectId.replace(/[^a-zA-Z0-9]/g, '')
 
   return (
     <div
@@ -57,49 +55,31 @@ export function DeepDuplicatePanel(props: DeepDuplicatePanelProps): React.JSX.El
 
       {snapshot.deepDuplicateEnabled && (
         <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: '0 0 auto' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#526176', letterSpacing: '0.03em' }}>
-                Project Reference Field ID
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '3px', maxWidth: '320px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#526176', letterSpacing: '0.03em' }}>
+              Project ID
+            </span>
+            <input
+              type="text"
+              value={snapshot.projectId}
+              onChange={(e) => handlers.onProjectIdChange(e.target.value)}
+              placeholder="e.g. PRJ-2026-001"
+              style={{
+                height: '32px',
+                padding: '0 10px',
+                border: '1px solid #cfd8e3',
+                borderRadius: '8px',
+                fontSize: '12px',
+                width: '100%',
+                boxSizing: 'border-box',
+              }}
+            />
+            {snapshot.projectId && sanitizedPreview && (
+              <span style={{ fontSize: '11px', color: '#526176' }}>
+                Item numbers will be suffixed with <strong>{sanitizedPreview}</strong>
               </span>
-              <input
-                type="text"
-                value={snapshot.projectReferenceFieldId}
-                onChange={(e) => handlers.onProjectReferenceFieldIdChange(e.target.value)}
-                placeholder="e.g. PROJECT_REF"
-                style={{
-                  height: '32px',
-                  padding: '0 10px',
-                  border: '1px solid #cfd8e3',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  width: '200px',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </label>
-
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: '1 1 200px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#526176', letterSpacing: '0.03em' }}>
-                Project Reference Value
-              </span>
-              <input
-                type="text"
-                value={snapshot.projectReference}
-                onChange={(e) => handlers.onProjectReferenceChange(e.target.value)}
-                placeholder="e.g. PRJ-2026-001"
-                style={{
-                  height: '32px',
-                  padding: '0 10px',
-                  border: '1px solid #cfd8e3',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </label>
-          </div>
+            )}
+          </label>
 
           {stagedNodes.length > 0 && (
             <p style={{ margin: 0, color: '#384456', fontSize: '12px' }}>
@@ -111,9 +91,9 @@ export function DeepDuplicatePanel(props: DeepDuplicatePanelProps): React.JSX.El
             </p>
           )}
 
-          {snapshot.deepDuplicateEnabled && !snapshot.projectReferenceFieldId.trim() && (
+          {!snapshot.projectId.trim() && (
             <p style={{ margin: 0, color: '#F9A825', fontSize: '12px' }}>
-              ⚠ Enter a Project Reference Field ID to set the field on duplicated items.
+              ⚠ Enter a Project ID to generate unique item numbers for duplicated items.
             </p>
           )}
         </div>

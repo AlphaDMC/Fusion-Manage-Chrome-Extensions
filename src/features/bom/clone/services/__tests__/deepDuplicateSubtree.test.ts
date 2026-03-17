@@ -71,7 +71,7 @@ describe('deepDuplicateSubtree — reference node', () => {
     const plan = makeNode('12345', '99-001')
     const context = makeContext()
 
-    const result = await mutateApi.deepDuplicateSubtree(context, plan, 'PROJECT_REF', 'PRJ-001')
+    const result = await mutateApi.deepDuplicateSubtree(context, plan, 'PRJ-001')
 
     expect(result).toBe(12345)
     expect(client.createItem).not.toHaveBeenCalled()
@@ -84,7 +84,7 @@ describe('deepDuplicateSubtree — reference node', () => {
     const mutateApi = createMutateApi({ client, fetchItemFieldsForCopy })
 
     const plan = makeNode('55555', '99-XYZ')
-    await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PROJECT_REF', 'PRJ-001')
+    await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PRJ-001')
 
     expect(client.fetchSections).not.toHaveBeenCalled()
   })
@@ -101,7 +101,7 @@ describe('deepDuplicateSubtree — reference node', () => {
     }
 
     await expect(
-      mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PROJECT_REF', 'PRJ-001')
+      mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PRJ-001')
     ).rejects.toThrow()
   })
 })
@@ -115,17 +115,17 @@ describe('deepDuplicateSubtree — duplicate node (no children)', () => {
     const plan = makeNode('5000', 'SUB-001')
     const context = makeContext()
 
-    const newId = await mutateApi.deepDuplicateSubtree(context, plan, 'PROJECT_REF', 'PRJ-001')
+    const newId = await mutateApi.deepDuplicateSubtree(context, plan, 'PRJ-001')
 
     expect(newId).toBe(9999) // resolved from location header '/items/9999'
     expect(fetchItemFieldsForCopy).toHaveBeenCalledWith(context, 5000)
     expect(client.createItem).toHaveBeenCalledOnce()
 
     const createCall = (client.createItem as MockedFunction<ApiClient['createItem']>).mock.calls[0][0]
-    // Project reference field should be merged in
+    // Item number should be suffixed with the sanitized project ID (PRJ001 from PRJ-001)
     expect(createCall.fields).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ fieldId: 'PROJECT_REF', value: 'PRJ-001' }),
+        expect.objectContaining({ fieldId: 'DESCRIPTOR', value: 'SUB-001PRJ001' }),
       ])
     )
     expect(client.addBomItem).not.toHaveBeenCalled() // no children
@@ -139,7 +139,7 @@ describe('deepDuplicateSubtree — duplicate node (no children)', () => {
     const context = makeContext()
     const plan = makeNode('5001', 'SUB-002')
 
-    await mutateApi.deepDuplicateSubtree(context, plan, 'PROJECT_REF', 'PRJ-001')
+    await mutateApi.deepDuplicateSubtree(context, plan, 'PRJ-001')
 
     expect(client.fetchSections).toHaveBeenCalledWith({
       tenant: 'test-tenant',
@@ -147,34 +147,19 @@ describe('deepDuplicateSubtree — duplicate node (no children)', () => {
     })
   })
 
-  it('omits project reference field when projectReferenceFieldId is blank', async () => {
+  it('uses unmodified source number when projectId is blank', async () => {
     const client = makeClient()
     const fetchItemFieldsForCopy = makeFetchItemFieldsForCopy()
     const mutateApi = createMutateApi({ client, fetchItemFieldsForCopy })
 
     const plan = makeNode('5002', 'SUB-003')
-    await mutateApi.deepDuplicateSubtree(makeContext(), plan, '  ', 'PRJ-001')
+    await mutateApi.deepDuplicateSubtree(makeContext(), plan, '  ')
 
     const createCall = (client.createItem as MockedFunction<ApiClient['createItem']>).mock.calls[0][0]
-    const fieldIds = (createCall.fields as Array<{ fieldId: string }>).map((f) => f.fieldId)
-    expect(fieldIds).not.toContain('  ')
-    // Only the copied field should be present
+    // With blank projectId, the number should remain as source number (no suffix)
     expect(createCall.fields).toEqual(
-      expect.arrayContaining([expect.objectContaining({ fieldId: 'TITLE' })])
+      expect.arrayContaining([expect.objectContaining({ fieldId: 'DESCRIPTOR', value: 'SUB-003' })])
     )
-  })
-
-  it('omits project reference field when projectReference value is blank', async () => {
-    const client = makeClient()
-    const fetchItemFieldsForCopy = makeFetchItemFieldsForCopy()
-    const mutateApi = createMutateApi({ client, fetchItemFieldsForCopy })
-
-    const plan = makeNode('5003', 'SUB-004')
-    await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PROJECT_REF', '  ')
-
-    const createCall = (client.createItem as MockedFunction<ApiClient['createItem']>).mock.calls[0][0]
-    const fieldIds = (createCall.fields as Array<{ fieldId: string }>).map((f) => f.fieldId)
-    expect(fieldIds).not.toContain('PROJECT_REF')
   })
 
   it('passes sections from fetchSections to createItem', async () => {
@@ -187,7 +172,7 @@ describe('deepDuplicateSubtree — duplicate node (no children)', () => {
     const mutateApi = createMutateApi({ client, fetchItemFieldsForCopy: makeFetchItemFieldsForCopy() })
     const plan = makeNode('5004', 'SUB-005')
 
-    await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PROJECT_REF', 'PRJ-001')
+    await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PRJ-001')
 
     const createCall = (client.createItem as MockedFunction<ApiClient['createItem']>).mock.calls[0][0]
     expect(createCall.sections).toEqual(sections)
@@ -202,7 +187,7 @@ describe('deepDuplicateSubtree — duplicate node (no children)', () => {
     const mutateApi = createMutateApi({ client, fetchItemFieldsForCopy: makeFetchItemFieldsForCopy() })
     const plan = makeNode('6000', 'SUB-006')
 
-    const newId = await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PROJECT_REF', 'PRJ-001')
+    const newId = await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PRJ-001')
     expect(newId).toBe(7777)
   })
 
@@ -215,7 +200,7 @@ describe('deepDuplicateSubtree — duplicate node (no children)', () => {
     const mutateApi = createMutateApi({ client, fetchItemFieldsForCopy: makeFetchItemFieldsForCopy() })
     const plan = makeNode('6001', 'SUB-007')
 
-    const newId = await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PROJECT_REF', 'PRJ-001')
+    const newId = await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PRJ-001')
     expect(newId).toBe(8888)
   })
 })
@@ -241,7 +226,7 @@ describe('deepDuplicateSubtree — duplicate node with mixed children', () => {
     const parentPlan = makeNode('4000', 'BLD-001', '1', [partPlan, subPlan])
     const context = makeContext()
 
-    const newParentId = await mutateApi.deepDuplicateSubtree(context, parentPlan, 'PROJECT_REF', 'PRJ-001')
+    const newParentId = await mutateApi.deepDuplicateSubtree(context, parentPlan, 'PRJ-001')
 
     // Parent was created first (id 9001), then sub (id 9002)
     expect(newParentId).toBe(9001)
@@ -274,7 +259,7 @@ describe('deepDuplicateSubtree — duplicate node with mixed children', () => {
     const parentPlan = makeNode('6000', 'BLD-100', '1', [childPlan])
     const context = makeContext()
 
-    await mutateApi.deepDuplicateSubtree(context, parentPlan, 'PROJECT_REF', 'PRJ-001')
+    await mutateApi.deepDuplicateSubtree(context, parentPlan, 'PRJ-001')
 
     const addCall = (client.addBomItem as MockedFunction<ApiClient['addBomItem']>).mock.calls[0][0]
     expect(addCall).toMatchObject({
@@ -303,7 +288,7 @@ describe('deepDuplicateSubtree — duplicate node with mixed children', () => {
     const childPlan = makeNode('1002', 'SUB-001', '1', [grandchildPlan])
     const parentPlan = makeNode('1003', 'BLD-001', '1', [childPlan])
 
-    await mutateApi.deepDuplicateSubtree(makeContext(), parentPlan, 'PROJECT_REF', 'PRJ-001')
+    await mutateApi.deepDuplicateSubtree(makeContext(), parentPlan, 'PRJ-001')
 
     // parent (9001) + child (9002) + grandchild (9003) = 3 items created
     expect(createCallCount).toBe(3)
@@ -316,7 +301,7 @@ describe('deepDuplicateSubtree — duplicate node with mixed children', () => {
     const mutateApi = createMutateApi({ client, fetchItemFieldsForCopy })
 
     const plan = makeNode('7000', 'LEAF-001')
-    await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PROJECT_REF', 'PRJ-001')
+    await mutateApi.deepDuplicateSubtree(makeContext(), plan, 'PRJ-001')
 
     expect(client.addBomItem).not.toHaveBeenCalled()
   })

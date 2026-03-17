@@ -78,8 +78,7 @@ export function createMutateApi(params: {
   async function deepDuplicateSubtreeImpl(
     context: Parameters<CloneService['deepDuplicateSubtree']>[0],
     plan: DuplicatePlanNode,
-    projectReferenceFieldId: string,
-    projectReference: string
+    projectId: string
   ): Promise<number> {
     if (plan.kind === 'reference') {
       const itemId = Number(plan.sourceNode.id)
@@ -96,9 +95,21 @@ export function createMutateApi(params: {
 
     const copiedFields = await fetchItemFieldsForCopy(context, sourceItemId)
     const fieldMap = new Map(copiedFields.map((f) => [f.fieldId, f.value]))
-    if (projectReferenceFieldId.trim() && projectReference.trim()) {
-      fieldMap.set(projectReferenceFieldId.trim(), projectReference.trim())
+
+    // Build a unique item number by appending the sanitized project ID to the
+    // source item's number. Strip all non-alphanumeric characters from projectId
+    // so there are no spaces or special characters in the resulting number.
+    const sanitizedProjectId = projectId.replace(/[^a-zA-Z0-9]/g, '')
+    const sourceNumber = plan.sourceNode.number ?? ''
+    if (sourceNumber) {
+      const newNumber = sanitizedProjectId ? sourceNumber + sanitizedProjectId : sourceNumber
+      // Find the field whose value matches the source number (the number field
+      // may have any field ID depending on workspace configuration). If found,
+      // update it in place; otherwise add DESCRIPTOR as a fallback.
+      const numberField = copiedFields.find((f) => f.value === sourceNumber)
+      fieldMap.set(numberField?.fieldId ?? 'DESCRIPTOR', newNumber)
     }
+
     const fields = Array.from(fieldMap.entries()).map(([fieldId, value]) => ({
       fieldId,
       value,
@@ -127,8 +138,7 @@ export function createMutateApi(params: {
       const childItemId = await deepDuplicateSubtreeImpl(
         context,
         childPlan,
-        projectReferenceFieldId,
-        projectReference
+        projectId
       )
       await client.addBomItem({
         tenant: context.tenant,
