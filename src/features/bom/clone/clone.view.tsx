@@ -76,6 +76,9 @@ type CloneViewHandlers = {
   onResetTarget: () => void
   onCommitClone: () => void
   onCloseCommitErrors: () => void
+  onToggleDeepDuplicate: (enabled: boolean) => void
+  onProjectReferenceFieldIdChange: (fieldId: string) => void
+  onProjectReferenceChange: (value: string) => void
   onEditNode: (nodeId: string) => void
   onCloseEditPanel: (options?: { discardDraft?: boolean }) => void
   onSaveEditPanel: (nodeId: string, values: Record<string, string>) => void
@@ -133,6 +136,11 @@ function ClonePhaseContent(props: {
         modalRoot={modalRoot}
         snapshot={snapshot}
         handlers={handlers as CloneStructureHandlers}
+        deepDuplicateHandlers={{
+          onToggleDeepDuplicate: handlers.onToggleDeepDuplicate,
+          onProjectReferenceFieldIdChange: handlers.onProjectReferenceFieldIdChange,
+          onProjectReferenceChange: handlers.onProjectReferenceChange
+        }}
       />
     )
   }

@@ -7,6 +7,7 @@ import {
 import { CloneEditPanel } from './EditPanel'
 import { CloneSourcePane, CloneTargetPane } from '../structure/StructurePanes'
 import { applyRequiredIndicator, type CloneStructureHandlers } from '../structure/structure.rows.view'
+import { DeepDuplicatePanel, type DeepDuplicatePanelHandlers } from './DeepDuplicatePanel'
 
 export { buildOperationCounts, buildRequiredWarningSummary } from '../../services/viewModel.service'
 export type { CloneStructureHandlers } from '../structure/structure.rows.view'
@@ -26,6 +27,7 @@ export type CloneStructurePhaseContentProps = {
   modalRoot: HTMLDivElement
   snapshot: BomCloneStateSnapshot
   handlers: CloneStructureHandlers
+  deepDuplicateHandlers: DeepDuplicatePanelHandlers
 }
 
 export function CloneStructurePhaseContent(props: CloneStructurePhaseContentProps): React.JSX.Element {
@@ -47,6 +49,10 @@ export function CloneStructurePhaseContent(props: CloneStructurePhaseContentProp
           applyRequiredIndicator={applyRequiredIndicator}
         />
       </div>
+      <DeepDuplicatePanel
+        snapshot={snapshot}
+        handlers={props.deepDuplicateHandlers}
+      />
     </>
   )
 }
