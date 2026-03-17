@@ -109,7 +109,7 @@ export function createMutateApi(params: {
       tenant: context.tenant,
       workspaceId: context.workspaceId,
     })
-    const sections = Array.isArray(sectionsResult) ? sectionsResult : []
+    const sections = resolveSectionsPayload(sectionsResult)
 
     const createResult = await client.createItem({
       tenant: context.tenant,
@@ -122,7 +122,8 @@ export function createMutateApi(params: {
       throw new Error(`Item creation returned invalid ID for: ${plan.sourceNode.label}`)
     }
 
-    for (const childPlan of plan.children) {
+    for (let i = 0; i < plan.children.length; i++) {
+      const childPlan = plan.children[i]
       const childItemId = await deepDuplicateSubtreeImpl(
         context,
         childPlan,
@@ -135,7 +136,7 @@ export function createMutateApi(params: {
         wsIdChild: context.workspaceId,
         dmsIdParent: newItemId,
         dmsIdChild: childItemId,
-        number: 1,
+        number: i + 1,
         quantity: childPlan.sourceNode.quantity || '1',
       })
     }
