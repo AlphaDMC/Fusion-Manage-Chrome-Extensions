@@ -15,7 +15,10 @@ export type { CloneService }
 export function createCloneService(runtime: CloneRuntime): CloneService {
   const client = createApiClient(runtime)
   const readApi = createReadApi({ client })
-  const mutateApi = createMutateApi({ client })
+  const mutateApi = createMutateApi({
+    client,
+    fetchItemFieldsForCopy: readApi.fetchItemFieldsForCopy.bind(readApi),
+  })
 
   return {
     validateLinkableItem: readApi.validateLinkableItem,
@@ -26,6 +29,8 @@ export function createCloneService(runtime: CloneRuntime): CloneService {
     fetchTargetBomChildItemIdsAcrossViews: readApi.fetchTargetBomChildItemIdsAcrossViews,
     fetchLinkableItems: readApi.fetchLinkableItems,
     fetchOperationFormDefinition: readApi.fetchOperationFormDefinition,
+    fetchItemFieldsForCopy: readApi.fetchItemFieldsForCopy,
+    deepDuplicateSubtree: mutateApi.deepDuplicateSubtree,
     createBomCloneOperationItem: mutateApi.createBomCloneOperationItem,
     commitBomCloneItem: mutateApi.commitBomCloneItem,
     updateBomCloneItem: mutateApi.updateBomCloneItem,

@@ -247,6 +247,12 @@ export function createCloneCommitFlow(options: CommitFlowOptions): {
       return
     }
 
+    if (snapshotBeforeCommit.deepDuplicateEnabled && !snapshotBeforeCommit.projectId.trim()) {
+      state.setErrorMessage('Enter a Project ID before committing with deep duplication enabled.')
+      render()
+      return
+    }
+
     state.setCommitInProgress(true)
     state.setCommitProgress(0, 0)
     state.setCommitErrors([])

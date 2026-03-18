@@ -1,4 +1,5 @@
 import type { BomCloneContext, BomCloneFormSection, BomCloneLinkableItem, BomCloneNode, FormFieldDefinition } from '../clone.types'
+import type { DuplicatePlanNode } from './deepDuplicate.service'
 
 export type CloneService = {
   validateLinkableItem: (context: BomCloneContext, sourceItemId: number) => Promise<boolean>
@@ -27,6 +28,15 @@ export type CloneService = {
   fetchOperationFormDefinition: (
     context: Pick<BomCloneContext, 'tenant' | 'workspaceId'>
   ) => Promise<{ fields: FormFieldDefinition[]; sections: BomCloneFormSection[]; metaLinks: Record<string, string> }>
+  fetchItemFieldsForCopy: (
+    context: BomCloneContext,
+    itemId: number
+  ) => Promise<Array<{ fieldId: string; value: string }>>
+  deepDuplicateSubtree: (
+    context: BomCloneContext,
+    plan: DuplicatePlanNode,
+    projectId: string
+  ) => Promise<number>
   createBomCloneOperationItem: (
     context: BomCloneContext,
     payload: {

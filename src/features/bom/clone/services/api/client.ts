@@ -9,6 +9,7 @@ export type ApiClient = {
   fetchFields: (payload: Record<string, unknown>) => Promise<unknown>
   fetchSections: (payload: Record<string, unknown>) => Promise<unknown>
   createItem: (payload: Record<string, unknown>) => Promise<unknown>
+  getItemDetails: (payload: Record<string, unknown>) => Promise<unknown>
   fetchBomLinkableItems: (payload: Record<string, unknown>) => Promise<unknown>
   addBomItem: (payload: Record<string, unknown>) => Promise<unknown>
   updateBomItem: (payload: Record<string, unknown>) => Promise<unknown>
@@ -38,6 +39,9 @@ export function createApiClient(runtime: Runtime): ApiClient {
     },
     createItem(payload) {
       return runtime.requestPlmAction('createItem', payload)
+    },
+    getItemDetails(payload) {
+      return runtime.requestPlmAction('getItemDetails', payload)
     },
     fetchBomLinkableItems(payload) {
       return runtime.requestPlmAction('fetchBomLinkableItems', payload)

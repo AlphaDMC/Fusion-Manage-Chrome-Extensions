@@ -489,7 +489,15 @@ export function createCloneController(runtime: CloneRuntime): CloneController {
       ...(structureFlow?.buildStructureHandlers() || noopStructureHandlers),
       ...(editFlow?.buildEditPanelHandlers() || noopEditHandlers),
       ...(editFlow?.buildLinkableHandlers() || noopEditHandlers),
-      ...commitFlow.buildLifecycleHandlers(modalRoot)
+      ...commitFlow.buildLifecycleHandlers(modalRoot),
+      onToggleDeepDuplicate(enabled: boolean) {
+        state.setDeepDuplicateEnabled(enabled)
+        render()
+      },
+      onProjectIdChange(value: string) {
+        state.setProjectId(value)
+        render()
+      }
     }
 
     view.render(modalRoot, state.getSnapshot(), handlers)

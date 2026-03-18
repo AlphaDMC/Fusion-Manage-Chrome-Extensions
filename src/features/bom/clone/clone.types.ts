@@ -186,6 +186,8 @@ export type BomCloneStateSnapshot = {
   editPanelRequiredOnly: boolean
   sourceStatusFilter: SourceStatusFilter
   targetFieldOverrides: Record<string, Record<string, string>>
+  deepDuplicateEnabled: boolean
+  projectId: string
 }
 
 export type BomCloneCapabilityState = 'initializing' | 'enabled' | 'degraded' | 'disabled'

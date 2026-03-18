@@ -105,6 +105,8 @@ type CloneState = {
   setSourceStatusFilter: (value: BomCloneStateSnapshot['sourceStatusFilter']) => void
   setTargetFieldOverride: (nodeId: string, values: Record<string, string>) => void
   setTargetFieldOverrides: (overrides: Record<string, Record<string, string>>) => void
+  setDeepDuplicateEnabled: (enabled: boolean) => void
+  setProjectId: (value: string) => void
   setInitialTargetState: (
     targetBomTree: BomCloneNode[],
     expandedNodeIds: string[],
@@ -115,6 +117,14 @@ type CloneState = {
 }
 
 const DEFAULT_LIMIT = 25
+
+function readSavedProjectId(): string {
+  try {
+    return window.localStorage.getItem('plmExtension.deepDuplicate.projectId') ?? ''
+  } catch {
+    return ''
+  }
+}
 
 function cloneBomNode(node: BomCloneNode): BomCloneNode {
   const clone: BomCloneNode = {
@@ -221,7 +231,9 @@ function createDefaultSnapshot(): BomCloneStateSnapshot {
     editingPanelMode: 'item',
     editPanelRequiredOnly: false,
     sourceStatusFilter: 'all',
-    targetFieldOverrides: {}
+    targetFieldOverrides: {},
+    deepDuplicateEnabled: false,
+    projectId: readSavedProjectId()
   }
 }
 
@@ -530,6 +542,17 @@ export function createCloneState(): CloneState {
         next[nodeId] = { ...values }
       }
       merge({ targetFieldOverrides: next })
+    },
+    setDeepDuplicateEnabled(enabled) {
+      merge({ deepDuplicateEnabled: enabled })
+    },
+    setProjectId(value) {
+      merge({ projectId: value })
+      try {
+        window.localStorage.setItem('plmExtension.deepDuplicate.projectId', value)
+      } catch {
+        // Non-critical; ignore storage errors.
+      }
     },
     setInitialTargetState(
       targetBomTree,

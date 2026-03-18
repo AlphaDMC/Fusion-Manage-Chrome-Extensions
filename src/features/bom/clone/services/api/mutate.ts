@@ -1,10 +1,15 @@
 import type { CloneService } from '../service.contract'
+import type { DuplicatePlanNode } from '../deepDuplicate.service'
 import type { ApiClient } from './client'
 import { assertMutationSuccess } from './parse'
 
 type MutateApi = Pick<
   CloneService,
-  'createBomCloneOperationItem' | 'commitBomCloneItem' | 'updateBomCloneItem' | 'deleteBomCloneItem'
+  | 'createBomCloneOperationItem'
+  | 'commitBomCloneItem'
+  | 'updateBomCloneItem'
+  | 'deleteBomCloneItem'
+  | 'deepDuplicateSubtree'
 >
 
 function resolveSectionsPayload(result: unknown): unknown[] {
@@ -64,8 +69,90 @@ function resolveCreatedItemId(result: unknown): number {
   return parsed
 }
 
-export function createMutateApi(params: { client: ApiClient }): MutateApi {
-  const { client } = params
+export function createMutateApi(params: {
+  client: ApiClient
+  fetchItemFieldsForCopy: CloneService['fetchItemFieldsForCopy']
+}): MutateApi {
+  const { client, fetchItemFieldsForCopy } = params
+
+  async function deepDuplicateSubtreeImpl(
+    context: Parameters<CloneService['deepDuplicateSubtree']>[0],
+    plan: DuplicatePlanNode,
+    projectId: string
+  ): Promise<number> {
+    if (plan.kind === 'reference') {
+      const itemId = Number(plan.sourceNode.id)
+      if (!Number.isFinite(itemId) || itemId <= 0) {
+        throw new Error(`Cannot resolve item ID for reference node: ${plan.sourceNode.label}`)
+      }
+      return itemId
+    }
+
+    const sourceItemId = Number(plan.sourceNode.id)
+    if (!Number.isFinite(sourceItemId) || sourceItemId <= 0) {
+      throw new Error(`Cannot resolve source item ID for: ${plan.sourceNode.label}`)
+    }
+
+    const copiedFields = await fetchItemFieldsForCopy(context, sourceItemId)
+    const fieldMap = new Map(copiedFields.map((f) => [f.fieldId, f.value]))
+
+    // Build a unique item number by appending the sanitized project ID to the
+    // source item's number. Strip all non-alphanumeric characters from projectId
+    // so there are no spaces or special characters in the resulting number.
+    const sanitizedProjectId = projectId.replace(/[^a-zA-Z0-9]/g, '')
+    const sourceNumber = plan.sourceNode.number ?? ''
+    if (sourceNumber) {
+      const newNumber = sanitizedProjectId ? sourceNumber + sanitizedProjectId : sourceNumber
+      // Find the field whose value matches the source number (the number field
+      // may have any field ID depending on workspace configuration). If found,
+      // update it in place; otherwise add DESCRIPTOR as a fallback.
+      const numberField = copiedFields.find((f) => f.value === sourceNumber)
+      fieldMap.set(numberField?.fieldId ?? 'DESCRIPTOR', newNumber)
+    }
+
+    const fields = Array.from(fieldMap.entries()).map(([fieldId, value]) => ({
+      fieldId,
+      value,
+      type: 'string' as const,
+    }))
+
+    const sectionsResult = await client.fetchSections({
+      tenant: context.tenant,
+      workspaceId: context.workspaceId,
+    })
+    const sections = resolveSectionsPayload(sectionsResult)
+
+    const createResult = await client.createItem({
+      tenant: context.tenant,
+      workspaceId: context.workspaceId,
+      sections,
+      fields,
+    })
+    const newItemId = resolveCreatedItemId(createResult)
+    if (!newItemId || newItemId <= 0) {
+      throw new Error(`Item creation returned invalid ID for: ${plan.sourceNode.label}`)
+    }
+
+    for (let i = 0; i < plan.children.length; i++) {
+      const childPlan = plan.children[i]
+      const childItemId = await deepDuplicateSubtreeImpl(
+        context,
+        childPlan,
+        projectId
+      )
+      await client.addBomItem({
+        tenant: context.tenant,
+        wsIdParent: context.workspaceId,
+        wsIdChild: context.workspaceId,
+        dmsIdParent: newItemId,
+        dmsIdChild: childItemId,
+        number: i + 1,
+        quantity: childPlan.sourceNode.quantity || '1',
+      })
+    }
+
+    return newItemId
+  }
 
   return {
     async createBomCloneOperationItem(context, payload) {
@@ -122,7 +209,9 @@ export function createMutateApi(params: { client: ApiClient }): MutateApi {
         edgeId: payload.edgeId
       })
       assertMutationSuccess('remove', result)
-    }
+    },
+
+    deepDuplicateSubtree: deepDuplicateSubtreeImpl,
   }
 }
 

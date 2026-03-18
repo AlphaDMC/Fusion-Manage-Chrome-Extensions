@@ -2,6 +2,7 @@ import type { BomCloneContext, BomCloneLinkableItem, BomCloneNode } from '../../
 import { buildOperationFormModel } from '../form/operationForm.service'
 import { dedupePositiveInts, parsePositiveInt } from '../normalize.service'
 import type { CloneService } from '../service.contract'
+import { extractCopyableFields } from '../copyItem.service'
 import { collectTopLevelChildItemIdsFromTree, mergeBomNodeCollections } from '../structure/tree.service'
 import { parseViewDefIdFromLink } from '../form/viewDefLinks'
 import { asDisplayString, extractArray, readNodeId, readNodeLabel, toBomTree } from './parseTree'
@@ -18,6 +19,7 @@ type ReadApi = Pick<
   | 'fetchTargetBomChildItemIdsAcrossViews'
   | 'fetchLinkableItems'
   | 'fetchOperationFormDefinition'
+  | 'fetchItemFieldsForCopy'
 >
 
 function extractBomViewDefIds(response: unknown): number[] {
@@ -233,6 +235,15 @@ export function createReadApi(params: {
         offset: Number(data.offset) || options.offset || 0,
         limit: Number(data.limit) || options.limit || 100
       }
+    },
+
+    async fetchItemFieldsForCopy(context, itemId) {
+      const payload = await client.getItemDetails({
+        tenant: context.tenant,
+        workspaceId: context.workspaceId,
+        dmsId: itemId,
+      })
+      return extractCopyableFields(payload)
     },
 
     async fetchOperationFormDefinition(context) {
