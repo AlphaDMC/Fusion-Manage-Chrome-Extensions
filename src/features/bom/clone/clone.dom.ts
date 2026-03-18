@@ -2,7 +2,7 @@ import type { ModalAction } from '../../../shared/runtime/types'
 import { ensureStyleTag } from '../../../dom/styles'
 import { buildFormPanelStyles } from '../../../ui/formPanel/formPanel.styles'
 import { ensureItemSelectorStyles } from '../../../shared/item-selector/styles'
-import type { BomCloneContext, CloneLaunchMode } from './clone.types'
+import type { BomCloneContext, CloneQuickCreateAction } from './clone.types'
 
 /**
  * DOM adapter for BOM Clone.
@@ -22,8 +22,8 @@ export type CloneDomAdapter = {
   resolveContext: (urlString: string) => BomCloneContext | null
   isBomTab: (urlString: string) => boolean
   ensureCloneButton: (
-    onSelect: (mode: CloneLaunchMode) => void,
-    options?: { disabled?: boolean; title?: string }
+    onSelect: (action: CloneQuickCreateAction) => void,
+    options?: { disabled?: boolean; title?: string; label?: string }
   ) => HTMLDivElement | null
   isCloneButtonPresent: () => boolean
   observeCloneButtonPresence: (onNeedsSync: (delayMs: number) => void) => () => void
@@ -324,7 +324,14 @@ export function createCloneDom(runtime: BomCloneDomRuntime): CloneDomAdapter {
         manufacturing.dataset.mode = 'manufacturing'
         manufacturing.textContent = 'Manufacturing Bill of Materials'
 
-        menu.append(engineering, manufacturing)
+        const deepClone = document.createElement('button')
+        deepClone.type = 'button'
+        deepClone.className = 'plm-extension-bom-clone-dropdown-item'
+        deepClone.setAttribute('role', 'menuitem')
+        deepClone.dataset.mode = 'deep-clone'
+        deepClone.textContent = 'Deep Clone Current BOM'
+
+        menu.append(engineering, manufacturing, deepClone)
         container.append(button, menu)
       }
 
@@ -332,15 +339,20 @@ export function createCloneDom(runtime: BomCloneDomRuntime): CloneDomAdapter {
       const menu = container.querySelector(`.${CLONE_DROPDOWN_MENU_CLASS}`) as HTMLDivElement | null
       const engineering = container.querySelector('[data-mode="engineering"]') as HTMLButtonElement | null
       const manufacturing = container.querySelector('[data-mode="manufacturing"]') as HTMLButtonElement | null
-      if (!button || !menu || !engineering || !manufacturing) return null
+      const deepClone = container.querySelector('[data-mode="deep-clone"]') as HTMLButtonElement | null
+      const label = button?.querySelector('.label') as HTMLSpanElement | null
+      if (!button || !menu || !engineering || !manufacturing || !deepClone || !label) return null
       applyCloneTriggerSizing(button)
+      label.textContent = String(options?.label || 'Quick Create')
       engineering.textContent = 'Variant Bill of Materials'
       manufacturing.textContent = 'Manufacturing Bill of Materials'
+      deepClone.textContent = 'Deep Clone Current BOM'
       const disabled = Boolean(options?.disabled)
       const title = String(options?.title || '').trim()
       button.disabled = disabled
       engineering.disabled = disabled
       manufacturing.disabled = disabled
+      deepClone.disabled = disabled
       button.title = title
       button.setAttribute('aria-label', title || 'Quick Create')
       if (disabled) closeCloneDropdown()
@@ -353,16 +365,17 @@ export function createCloneDom(runtime: BomCloneDomRuntime): CloneDomAdapter {
         container.classList.toggle('is-open', nextOpen)
       }
 
-      const handleSelection = (mode: CloneLaunchMode) => (event: MouseEvent): void => {
+      const handleSelection = (action: CloneQuickCreateAction) => (event: MouseEvent): void => {
         event.preventDefault()
         event.stopPropagation()
         if (disabled) return
         closeCloneDropdown()
-        onSelect(mode)
+        onSelect(action)
       }
 
       engineering.onclick = handleSelection('engineering')
       manufacturing.onclick = handleSelection('manufacturing')
+      deepClone.onclick = handleSelection('deep-clone')
 
       if (actionDropdown && actionDropdown.nextElementSibling !== container) {
         container.remove()
@@ -438,5 +451,4 @@ export function createCloneDom(runtime: BomCloneDomRuntime): CloneDomAdapter {
     }
   }
 }
-
 

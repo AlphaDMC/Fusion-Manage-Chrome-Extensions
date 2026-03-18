@@ -5,11 +5,12 @@ import { createCloneHealth } from './clone.health'
 import { createEmptyBomClonePermissions, resolveBomClonePermissions, type BomClonePermissions } from './clone.permissions'
 import { createCloneService } from './clone.service'
 import { createCloneState } from './clone.state'
-import type { BomCloneCapabilityState, BomCloneContext, CloneLaunchMode } from './clone.types'
+import type { BomCloneCapabilityState, BomCloneContext, CloneLaunchMode, CloneQuickCreateAction } from './clone.types'
 import { createCloneView } from './clone.view'
 import { createCloneCommitFlow } from './controller/commitFlow'
 import { createCloneSearchFlow } from './controller/searchFlow'
 import type { CloneControllerRefs, CloneRuntime } from './controller/types'
+import { buildDuplicatePlan } from './services/deepDuplicate.service'
 import { remapBomFieldValuesByFieldId } from './services/field.service'
 import {
   buildAutoOverridesForSelection,
@@ -23,12 +24,18 @@ type CloneController = {
   update: () => void
   unmount: () => void
   launchClone: (mode: CloneLaunchMode) => Promise<void>
+  launchQuickCreateAction: (action: CloneQuickCreateAction) => Promise<void>
 }
 
 type StructureFlowModule = typeof import('./controller/structureFlow')
 type EditFlowModule = typeof import('./controller/editFlow')
 type StructureFlow = ReturnType<StructureFlowModule['createCloneStructureFlow']>
 type EditFlow = ReturnType<EditFlowModule['createCloneEditFlow']>
+
+const AUTOMATION_SUFFIX_ATTR = 'data-plm-bom-clone-automation-suffix'
+const AUTOMATION_STATUS_ATTR = 'data-plm-bom-clone-automation-status'
+const AUTOMATION_MESSAGE_ATTR = 'data-plm-bom-clone-automation-message'
+const AUTOMATION_LINK_ATTR = 'data-plm-bom-clone-automation-link'
 
 export function createCloneController(runtime: CloneRuntime): CloneController {
   const state = createCloneState()
@@ -58,6 +65,27 @@ export function createCloneController(runtime: CloneRuntime): CloneController {
   let permissionContextKey: string | null = null
   let permissionLoadInFlight: Promise<BomClonePermissions> | null = null
   let interactiveFlowsLoadPromise: Promise<void> | null = null
+  let quickCreateBusy = false
+
+  function readAutomationSuffix(): string | null {
+    const raw = document.documentElement.getAttribute(AUTOMATION_SUFFIX_ATTR)
+    const value = String(raw || '').trim()
+    return value || null
+  }
+
+  function setAutomationState(status: 'idle' | 'running' | 'success' | 'error', message = '', itemLink = ''): void {
+    document.documentElement.setAttribute(AUTOMATION_STATUS_ATTR, status)
+    if (message) {
+      document.documentElement.setAttribute(AUTOMATION_MESSAGE_ATTR, message)
+    } else {
+      document.documentElement.removeAttribute(AUTOMATION_MESSAGE_ATTR)
+    }
+    if (itemLink) {
+      document.documentElement.setAttribute(AUTOMATION_LINK_ATTR, itemLink)
+    } else {
+      document.documentElement.removeAttribute(AUTOMATION_LINK_ATTR)
+    }
+  }
 
   const refs: CloneControllerRefs = {
     getContext: () => context,
@@ -158,6 +186,92 @@ export function createCloneController(runtime: CloneRuntime): CloneController {
     state.setPermissionsResolved(true)
     state.setPermissionsLoading(false)
     return permissions
+  }
+
+  function setQuickCreateBusy(next: boolean): void {
+    if (quickCreateBusy === next) return
+    quickCreateBusy = next
+    scheduleSync(0)
+  }
+
+  async function launchDirectDeepClone(): Promise<void> {
+    const activeContext = refs.getContext()
+    if (!activeContext) return
+    if (quickCreateBusy) return
+
+    const automationSuffix = readAutomationSuffix()
+    setAutomationState('running')
+    setQuickCreateBusy(true)
+    try {
+      state.setPermissionsLoading(true)
+      const permissions = await refreshPermissionsForCurrentContext(true)
+      if (!permissions.canAdd) {
+        dom.removeCloneButton()
+        closeModal()
+        setHealthState('enabled')
+        return
+      }
+
+      const currentDescriptor = await runtime.requestPlmAction('getItemDescriptor', {
+        tenant: activeContext.tenant,
+        workspaceId: activeContext.workspaceId,
+        dmsId: activeContext.currentItemId
+      }).catch(() => null)
+
+      const previousProjectId = state.getSnapshot().projectId
+      const enteredProjectId = automationSuffix ?? window.prompt(
+        `Enter the deep-clone suffix for ${String(currentDescriptor || `item ${activeContext.currentItemId}`)}.`,
+        previousProjectId
+      )
+
+      if (enteredProjectId === null) return
+
+      const projectId = enteredProjectId.trim()
+      const sanitizedProjectId = projectId.replace(/[^a-zA-Z0-9]/g, '')
+      if (!sanitizedProjectId) {
+        const message = 'Deep Clone requires a suffix containing at least one letter or number.'
+        setAutomationState('error', message)
+        if (!automationSuffix) window.alert(message)
+        return
+      }
+
+      state.setProjectId(projectId)
+
+      const sourceBomTree = await service.fetchSourceBomStructure(activeContext, activeContext.currentItemId, { depth: 100 })
+      const sourceRoot = sourceBomTree[0]
+      if (!sourceRoot) {
+        throw new Error('Current BOM could not be loaded for deep clone.')
+      }
+
+      const duplicatePlan = buildDuplicatePlan([sourceRoot])[0]
+      const newItemId = await service.deepDuplicateSubtree(activeContext, duplicatePlan, projectId)
+      const newItemLink = `/api/v3/workspaces/${activeContext.workspaceId}/items/${newItemId}`
+      setAutomationState('success', '', newItemLink)
+      dom.openBomDetailsForProcess(newItemLink, activeContext)
+    } catch (error) {
+      const message = `Deep Clone failed. ${error instanceof Error ? error.message : String(error)}`
+      setAutomationState('error', message)
+      if (!automationSuffix) window.alert(message)
+    } finally {
+      setQuickCreateBusy(false)
+    }
+  }
+
+  async function launchSearchClone(mode: CloneLaunchMode): Promise<void> {
+    const resolvedContext = dom.resolveContext(window.location.href)
+    refs.setContext(resolvedContext)
+    if (!resolvedContext) return
+
+    state.setPermissionsLoading(true)
+    const permissions = await refreshPermissionsForCurrentContext(true)
+    if (!permissions.canAdd) {
+      dom.removeCloneButton()
+      closeModal()
+      setHealthState('enabled')
+      return
+    }
+
+    await searchFlow.openCloneModal(mode)
   }
 
   async function ensureOperationFormMetadataLoaded(): Promise<void> {
@@ -567,8 +681,12 @@ export function createCloneController(runtime: CloneRuntime): CloneController {
       return
     }
 
-    const button = dom.ensureCloneButton((mode) => {
+    const button = dom.ensureCloneButton((action) => {
       void (async () => {
+        if (action === 'deep-clone') {
+          await launchDirectDeepClone()
+          return
+        }
         state.setPermissionsLoading(true)
         const permissions = await refreshPermissionsForCurrentContext(true)
         if (!permissions.canAdd) {
@@ -577,11 +695,12 @@ export function createCloneController(runtime: CloneRuntime): CloneController {
           setHealthState('enabled')
           return
         }
-        void searchFlow.openCloneModal(mode)
+        void searchFlow.openCloneModal(action)
       })()
     }, {
-      disabled: false,
-      title: 'Quick Create'
+      disabled: quickCreateBusy,
+      title: quickCreateBusy ? 'Deep clone in progress' : 'Quick Create',
+      label: quickCreateBusy ? 'Deep Cloning...' : 'Quick Create'
     })
     if (!button) {
       setHealthState('degraded')
@@ -642,20 +761,19 @@ export function createCloneController(runtime: CloneRuntime): CloneController {
       scheduleSync(0)
     },
     async launchClone(mode) {
+      await launchSearchClone(mode)
+    },
+    async launchQuickCreateAction(action) {
       const resolvedContext = dom.resolveContext(window.location.href)
       refs.setContext(resolvedContext)
       if (!resolvedContext) return
 
-      state.setPermissionsLoading(true)
-      const permissions = await refreshPermissionsForCurrentContext(true)
-      if (!permissions.canAdd) {
-        dom.removeCloneButton()
-        closeModal()
-        setHealthState('enabled')
+      if (action === 'deep-clone') {
+        await launchDirectDeepClone()
         return
       }
 
-      await searchFlow.openCloneModal(mode)
+      await launchSearchClone(action)
     },
     unmount() {
       if (mounted) {
@@ -674,9 +792,8 @@ export function createCloneController(runtime: CloneRuntime): CloneController {
       clearPermissionState()
       refs.setContext(null)
       refs.setHasCommittedOperations(false)
+      quickCreateBusy = false
       setHealthState('disabled')
     }
   }
 }
-
-

@@ -20,6 +20,7 @@ export const TEMP_OPERATION_NAME_FIELD_ID = '__temp_operation_name__'
  */
 export type ClonePhase = 'search' | 'validation' | 'structure'
 export type CloneLaunchMode = 'engineering' | 'manufacturing'
+export type CloneQuickCreateAction = CloneLaunchMode | 'deep-clone'
 export type CloneEditPanelMode = 'item' | 'bom'
 export type SourceStatusFilter = 'all' | 'not-added' | 'modified' | 'added'
 
@@ -198,5 +199,4 @@ export type BomCloneDiagnosticCode =
   | 'SEARCH_API_FAILURE'
   | 'VALIDATION_FAILURE'
   | 'BOM_STRUCTURE_PARSING_FAILURE'
-
 

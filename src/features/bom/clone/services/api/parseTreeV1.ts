@@ -27,6 +27,20 @@ function readPositiveInt(value: unknown, fallback: number): number {
   return Math.floor(parsed)
 }
 
+function readQuantity(value: Record<string, unknown>): string {
+  const candidates = [
+    value.formattedQuantity,
+    value.quantity,
+    value.qty,
+    value.totalQuantity,
+  ]
+  for (const candidate of candidates) {
+    const resolved = readString(candidate)
+    if (resolved) return resolved
+  }
+  return ''
+}
+
 function extractBomItems(payload: unknown): Array<Record<string, unknown>> {
   const root = asRecord(payload)
   const candidates: unknown[] = [
@@ -143,7 +157,7 @@ export function toBomTreeV1(payload: unknown, options: ParseBomTreeV1Options): B
     if (itemId <= 0) continue
 
     const descriptor = readString(item.descriptor) || `Item ${itemId}`
-    const quantity = readString(item.formattedQuantity) || readString(item.quantity)
+    const quantity = readQuantity(item)
     const itemNumberOrdinal = readString(item.itemNumber) || '1'
     const isAssembly = String(item.assembly).toLowerCase() === 'true'
     const isLeaf = String(item.leaf).toLowerCase() === 'true'
@@ -173,5 +187,4 @@ export function toBomTreeV1(payload: unknown, options: ParseBomTreeV1Options): B
 
   return [markLoadedState(rootNode, depthLimit, 0)]
 }
-
 

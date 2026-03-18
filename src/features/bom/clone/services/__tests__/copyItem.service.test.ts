@@ -96,4 +96,39 @@ describe('extractCopyableFields', () => {
     expect(titleFields).toHaveLength(1)
     expect(titleFields[0].value).toBe('First')
   })
+
+  it('extracts fields from top-level fields arrays when sections are incomplete', () => {
+    const payload = {
+      sections: [],
+      fields: [
+        { fieldId: 'STOCK', value: false },
+        { fieldId: 'TITLE', value: 'From fields array' },
+      ],
+    }
+
+    expect(extractCopyableFields(payload)).toEqual([
+      { fieldId: 'STOCK', value: 'false' },
+      { fieldId: 'TITLE', value: 'From fields array' },
+    ])
+  })
+
+  it('extracts fields from derived sections and data wrappers', () => {
+    const payload = {
+      data: {
+        derived: {
+          sections: [
+            {
+              fields: [
+                { __self__: '/api/v3/workspaces/241/views/1/fields/CATEGORY', value: 'Panel' },
+              ],
+            },
+          ],
+        },
+      },
+    }
+
+    expect(extractCopyableFields(payload)).toEqual([
+      { fieldId: 'CATEGORY', value: 'Panel' },
+    ])
+  })
 })

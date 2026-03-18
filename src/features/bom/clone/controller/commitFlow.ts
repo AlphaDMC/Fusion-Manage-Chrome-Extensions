@@ -4,6 +4,7 @@ import {
   executeCommitOperations,
   type CommitExecutionResult
 } from '../services/commit.service'
+import { getTargetSelectedTree } from '../services/structure/selection.service'
 import { appendTopLevelNode, cloneNode, findNode, updateNodeById } from '../services/structure/tree.service'
 import { buildOperationCounts, buildRequiredWarningSummary, buildStructureViewModel } from '../services/viewModel.service'
 import type { CloneService } from '../clone.service'
@@ -44,6 +45,29 @@ function waitForNextPaint(): Promise<void> {
     }
     window.requestAnimationFrame(() => resolve())
   })
+}
+
+function parseWorkspaceIdFromItemLink(itemLink: string | undefined): number | null {
+  const link = String(itemLink || '').trim()
+  if (!link) return null
+  const match = /\/workspaces\/(\d+)\/items\//i.exec(link)
+  const workspaceId = Number.parseInt(match?.[1] || '', 10)
+  return Number.isFinite(workspaceId) && workspaceId > 0 ? workspaceId : null
+}
+
+function collectWorkspaceViolations(
+  nodes: BomCloneNode[],
+  expectedWorkspaceId: number,
+  violations: string[] = []
+): string[] {
+  for (const node of nodes) {
+    const workspaceId = parseWorkspaceIdFromItemLink(node.itemLink)
+    if (workspaceId !== null && workspaceId !== expectedWorkspaceId) {
+      violations.push(`${node.label || node.id} [${node.id}] -> workspace ${workspaceId}`)
+    }
+    if (node.children.length > 0) collectWorkspaceViolations(node.children, expectedWorkspaceId, violations)
+  }
+  return violations
 }
 
 function filterStringRecord(
@@ -253,6 +277,24 @@ export function createCloneCommitFlow(options: CommitFlowOptions): {
       return
     }
 
+    if (snapshotBeforeCommit.deepDuplicateEnabled) {
+      const selectedTree = getTargetSelectedTree(
+        snapshotBeforeCommit.sourceBomTree,
+        snapshotBeforeCommit.selectedNodesToClone
+      )
+      const workspaceViolations = collectWorkspaceViolations(selectedTree, activeContext.workspaceId)
+      if (workspaceViolations.length > 0) {
+        const preview = workspaceViolations.slice(0, 3).join('; ')
+        const suffix = workspaceViolations.length > 3 ? `; and ${workspaceViolations.length - 3} more` : ''
+        console.debug('[DEEP-DUP] workspace validation failed:', workspaceViolations)
+        state.setErrorMessage(
+          `Deep duplication requires every selected BOM item to be in workspace ${activeContext.workspaceId}. ${preview}${suffix}`
+        )
+        render()
+        return
+      }
+    }
+
     state.setCommitInProgress(true)
     state.setCommitProgress(0, 0)
     state.setCommitErrors([])
@@ -414,5 +456,4 @@ export function createCloneCommitFlow(options: CommitFlowOptions): {
     requestCloseModal
   }
 }
-
 

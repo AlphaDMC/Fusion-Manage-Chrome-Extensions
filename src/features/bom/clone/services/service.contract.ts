@@ -52,6 +52,7 @@ export type CloneService = {
     context: BomCloneContext,
     payload: {
       sourceItemId: number
+      sourceItemLink?: string
       itemNumber: number
       quantity: string
       parentItemId?: number
@@ -68,5 +69,4 @@ export type CloneService = {
     payload: { edgeId: string }
   ) => Promise<void>
 }
-
 

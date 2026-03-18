@@ -558,7 +558,7 @@ export async function executeCommitOperations(params: {
         const fallbackItemNumber = executionPlan.fallbackForNode(node.id)
         const effectiveItemNumber = snapshot.targetItemNumberOverrides[node.id] ?? node.itemNumber ?? `1.${fallbackItemNumber}`
         const commitItemNumber = parseCommitItemNumber(effectiveItemNumber, fallbackItemNumber)
-        const quantityFallback = node.stagedOperationDraft ? '1.0' : DEFAULT_CLONE_QUANTITY
+        const quantityFallback = String(node.quantity || '').trim() || '1.0'
         const effectiveQuantity = String(snapshot.targetQuantityOverrides[node.id] ?? node.quantity ?? '').trim() || quantityFallback
         const commitQuantity = normalizeQuantity(effectiveQuantity, quantityFallback)
         let sourceItemId: number
@@ -567,12 +567,15 @@ export async function executeCommitOperations(params: {
           // Deep duplicate path: create a copy of the subtree rooted at this node.
           const plan = buildDuplicatePlan([node])[0]
           if (!plan) throw new Error(`Failed to build duplicate plan for node: ${node.label}`)
+          console.debug('[DEEP-DUP] deepDuplicateEnabled=true, node:', node.label, 'number:', node.number, 'id:', node.id, 'projectId:', snapshot.projectId)
           sourceItemId = await dataService.deepDuplicateSubtree(
             activeContext,
             plan,
             snapshot.projectId
           )
+          console.debug('[DEEP-DUP] created new item id:', sourceItemId, 'for node:', node.label)
         } else {
+          console.debug('[DEEP-DUP] reference path, deepDuplicateEnabled:', snapshot.deepDuplicateEnabled, 'isPartNode:', isPartNode(node), 'node:', node.label)
           // Reference path (original behaviour).
           const resolved = resolveNumericItemIdFromNode(node)
           if (!resolved || resolved <= 0) throw new Error(`Unable to resolve source item id for ${node.label || node.id}`)
@@ -588,6 +591,7 @@ export async function executeCommitOperations(params: {
 
         await dataService.commitBomCloneItem(activeContext, {
           sourceItemId,
+          ...(node.itemLink ? { sourceItemLink: node.itemLink } : {}),
           itemNumber: commitItemNumber,
           quantity: commitQuantity,
           ...(typeof parentItemId === 'number' ? { parentItemId } : {}),
@@ -611,7 +615,7 @@ export async function executeCommitOperations(params: {
         const fallbackItemNumber = executionPlan.fallbackForNode(node.id)
         const effectiveItemNumber = snapshot.targetItemNumberOverrides[node.id] ?? node.itemNumber ?? `1.${fallbackItemNumber}`
         const commitItemNumber = parseCommitItemNumber(effectiveItemNumber, fallbackItemNumber)
-        const quantityFallback = node.stagedOperationDraft ? '1.0' : DEFAULT_CLONE_QUANTITY
+        const quantityFallback = String(node.quantity || '').trim() || '1.0'
         const effectiveQuantity = String(snapshot.targetQuantityOverrides[node.id] ?? node.quantity ?? '').trim() || quantityFallback
         const commitQuantity = normalizeQuantity(effectiveQuantity, quantityFallback)
 
@@ -641,5 +645,3 @@ export async function executeCommitOperations(params: {
     successes
   }
 }
-
-

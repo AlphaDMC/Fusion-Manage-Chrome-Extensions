@@ -247,6 +247,19 @@ export function CloneSourcePane(props: {
       <div className="plm-extension-bom-structure-pane-header">
         <span>{`Source: ${structureContext.sourceRoot?.label || 'Bill of Materials'}`}</span>
         <div className="plm-extension-bom-structure-pane-actions">
+          {snapshot.permissions.canAdd && (
+            <StructurePaneIconButton
+              iconClassName="zmdi zmdi-collection-plus"
+              label="Add All"
+              tooltip="Add all source items to target BOM"
+              disabled={snapshot.sourceExpandAllLoading || structureContext.filteredSourceRows.filter((r) => r.level === 0).length === 0}
+              onClick={() => {
+                for (const row of structureContext.filteredSourceRows) {
+                  if (row.level === 0) handlers.onDropNodeToTarget(row.id)
+                }
+              }}
+            />
+          )}
           <div className="plm-extension-bom-structure-pane-action-group">
             <StructurePaneIconButton
               iconClassName={snapshot.sourceExpandAllLoading ? 'zmdi zmdi-refresh zmdi-hc-spin' : 'zmdi zmdi-plus-square'}
@@ -436,6 +449,7 @@ export function CloneTargetPane(props: {
           sourceSide={false}
           emptyMessage={snapshot.showCommitErrorsOnly ? 'No failed rows to display.' : 'Drop rows here to stage BOM clone entries.'}
         />
+        <div style={{ minHeight: '60px' }} aria-hidden="true" />
       </div>
     </section>
   )

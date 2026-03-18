@@ -300,7 +300,7 @@ export function pruneManufacturingAssignmentsForOperation(
 export function resolveQuantityFallbackForNode(snapshot: BomCloneStateSnapshot, nodeId: string): string {
   const baseNode = findNode(snapshot.targetBomTree, nodeId) || findNode(snapshot.sourceBomTree, nodeId)
   if (String(baseNode?.quantity || '').trim()) return String(baseNode?.quantity || '').trim()
-  return baseNode?.stagedOperationDraft ? '1.0' : DEFAULT_CLONE_QUANTITY
+  return '1.0'
 }
 
 export function resolveQuantityFieldOverrideForNode(
@@ -1513,5 +1513,4 @@ export function resolveManufacturingSplit(
     )
   }
 }
-
 

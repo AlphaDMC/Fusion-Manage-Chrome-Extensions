@@ -1,7 +1,7 @@
 import type { PlmExtRuntime } from '../../../shared/runtime/types'
 import { createCloneDom } from './clone.dom'
 import { createEmptyBomClonePermissions, resolveBomClonePermissions, type BomClonePermissions } from './clone.permissions'
-import type { CloneLaunchMode } from './clone.types'
+import type { CloneQuickCreateAction } from './clone.types'
 
 type CloneRuntime = Pick<PlmExtRuntime, 'requestPlmAction' | 'openModal' | 'closeModal' | 'findByIdDeep'>
 type CloneControllerModule = typeof import('./clone.controller')
@@ -99,9 +99,9 @@ export function createBomCloneFeature(runtime: CloneRuntime): BomCloneFeature {
     return loadedController
   }
 
-  async function openClone(mode: CloneLaunchMode): Promise<void> {
+  async function openClone(action: CloneQuickCreateAction): Promise<void> {
     const loadedController = await ensureController()
-    await loadedController.launchClone(mode)
+    await loadedController.launchQuickCreateAction(action)
   }
 
   function syncLauncher(): void {
@@ -162,8 +162,8 @@ export function createBomCloneFeature(runtime: CloneRuntime): BomCloneFeature {
       return
     }
 
-    dom.ensureCloneButton((mode) => {
-      void openClone(mode)
+    dom.ensureCloneButton((action) => {
+      void openClone(action)
     }, {
       disabled: false,
       title: 'Quick Create'

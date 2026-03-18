@@ -8,6 +8,7 @@ import { parseViewDefIdFromLink } from '../form/viewDefLinks'
 import { asDisplayString, extractArray, readNodeId, readNodeLabel, toBomTree } from './parseTree'
 import { toBomTreeV1 } from './parseTreeV1'
 import type { ApiClient } from './client'
+import { mapWithConcurrency } from './concurrency'
 
 type ReadApi = Pick<
   CloneService,
@@ -39,26 +40,6 @@ function extractBomViewDefIds(response: unknown): number[] {
   return dedupePositiveInts(parsed)
 }
 
-async function mapWithConcurrency<TInput, TOutput>(
-  values: readonly TInput[],
-  concurrency: number,
-  iteratee: (value: TInput, index: number) => Promise<TOutput>
-): Promise<TOutput[]> {
-  const size = Math.max(1, Math.floor(concurrency))
-  const results = new Array<TOutput>(values.length)
-  let nextIndex = 0
-
-  async function worker(): Promise<void> {
-    while (nextIndex < values.length) {
-      const current = nextIndex
-      nextIndex += 1
-      results[current] = await iteratee(values[current], current)
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(size, values.length) }, () => worker()))
-  return results
-}
 
 function createViewReader(client: ApiClient, fetchConcurrency: number) {
   const fetchByViewDef = async (
@@ -133,9 +114,63 @@ function createViewReader(client: ApiClient, fetchConcurrency: number) {
   }
 }
 
+function readLinkableItemId(candidate: Record<string, unknown>): number | null {
+  const nestedItem = candidate.item && typeof candidate.item === 'object'
+    ? candidate.item as Record<string, unknown>
+    : null
+  const sources = nestedItem ? [nestedItem, candidate] : [candidate]
+  for (const source of sources) {
+    const parsed = Number(source.dmsId || source.itemId || source.id)
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
+  const seen = new Set<number>()
+  const visit = (value: unknown, depth = 0): number | null => {
+    if (depth > 6 || value == null) return null
+    if (typeof value === 'string') {
+      const match = /\/items\/(\d+)\b/i.exec(value)
+      if (!match) return null
+      const parsed = Number.parseInt(match[1], 10)
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        const nested = visit(entry, depth + 1)
+        if (nested !== null) return nested
+      }
+      return null
+    }
+    if (typeof value !== 'object') return null
+    const record = value as Record<string, unknown>
+    for (const key of ['dmsId', 'itemId', 'id']) {
+      const parsed = Number(record[key])
+      if (Number.isFinite(parsed) && parsed > 0 && !seen.has(parsed)) {
+        seen.add(parsed)
+        return parsed
+      }
+    }
+    for (const nestedValue of Object.values(record)) {
+      const nested = visit(nestedValue, depth + 1)
+      if (nested !== null) return nested
+    }
+    return null
+  }
+  return visit(candidate)
+}
+
 function createBomReader(client: ApiClient, fetchByViewDef: ReturnType<typeof createViewReader>['fetchByViewDef']) {
   return async (context: BomCloneContext, dmsId: number, options?: { depth?: number }): Promise<BomCloneNode[]> => {
     const depth = Number.isFinite(options?.depth) ? Math.max(1, Math.floor(Number(options?.depth))) : 1
+    let lastError: unknown = null
+
+    try {
+      const tree = await fetchByViewDef(context, dmsId, context.viewDefId, options)
+      if (tree.length > 0) return tree
+      console.debug('[DEEP-DUP] fetchSourceBomStructure falling back to V1: v3 tree empty for item', dmsId)
+    } catch (error) {
+      lastError = error
+      console.debug('[DEEP-DUP] fetchSourceBomStructure falling back to V1: v3 read failed for item', dmsId, error)
+      // Fall back to the legacy v1 load path when the viewdef-backed read fails.
+    }
 
     try {
       const response = await client.getBomV1({
@@ -150,11 +185,12 @@ function createBomReader(client: ApiClient, fetchByViewDef: ReturnType<typeof cr
         depth
       })
       if (tree.length > 0) return tree
-    } catch {
-      // Fall back to the existing v3 viewdef-backed load path.
+    } catch (error) {
+      lastError = error
     }
 
-    return fetchByViewDef(context, dmsId, context.viewDefId, options)
+    if (lastError) throw lastError
+    return []
   }
 }
 
@@ -179,7 +215,7 @@ export function createReadApi(params: {
       const rootArray = extractArray((response as { items?: unknown[] })?.items)
       const candidates = fromData.length > 0 ? fromData : rootArray
       if (candidates.length === 0) return true
-      return candidates.some((item) => Number(item.dmsId || item.itemId || item.id) === sourceItemId)
+      return candidates.some((item) => readLinkableItemId(item) === sourceItemId)
     },
 
     fetchWorkspaceBomViewDefIds: viewReader.fetchWorkspaceBomViewDefIds,
@@ -262,5 +298,3 @@ export function createReadApi(params: {
     }
   }
 }
-
-
