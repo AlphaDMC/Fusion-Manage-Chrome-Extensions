@@ -2,6 +2,7 @@ import { httpRequest } from './http'
 import { sortArray } from './plm.helper'
 
 const APS_BASE = (tenant) => `https://${tenant}.autodeskplm360.net`
+const LINKABLE_ITEM_PATH_RE = /\/api\/v3\/workspaces\/(\d+)\/items\/(\d+)\/views\/\d+\/linkable-items\/(\d+)(?:[/?#]|$)/i
 const VALIDATION_PAYLOAD_CACHE_MAX = 2000
 const validationPayloadCache = new Map()
 const validationPayloadInFlight = new Map()
@@ -73,6 +74,36 @@ function toTenantUrl(tenant, path) {
   const raw = String(path || '').trim()
   if (!raw) return ''
   return raw.startsWith('http') ? raw : `${APS_BASE(tenant)}${raw}`
+}
+
+function parseLinkableItemPath(link) {
+  const raw = String(link || '').trim()
+  if (!raw) return null
+  const pathname = raw.startsWith('http')
+    ? (() => {
+      try {
+        return new URL(raw).pathname
+      } catch {
+        return raw
+      }
+    })()
+    : raw
+  const match = LINKABLE_ITEM_PATH_RE.exec(pathname)
+  if (!match) return null
+
+  const workspaceId = Number(match[1])
+  const parentItemId = Number(match[2])
+  const linkableItemId = Number(match[3])
+  if (!Number.isFinite(workspaceId) || !Number.isFinite(parentItemId) || !Number.isFinite(linkableItemId)) {
+    return null
+  }
+
+  return {
+    workspaceId,
+    parentItemId,
+    linkableItemId,
+    link: raw
+  }
 }
 
 function resolveBomViewLink(entry) {
@@ -559,13 +590,15 @@ export async function addBomItem({
 
   const resolvedLinkParent = typeof linkParent !== 'undefined' ? linkParent : `/api/v3/workspaces/${wsIdParent}/items/${dmsIdParent}`
   const resolvedLinkChild = typeof linkChild !== 'undefined' ? linkChild : `/api/v3/workspaces/${wsIdChild}/items/${dmsIdChild}`
+  const linkableChildReference = parseLinkableItemPath(resolvedLinkChild)
+  const canonicalChildLink = `/api/v3/workspaces/${wsIdChild}/items/${dmsIdChild}`
   const isPinned = typeof pinned === 'undefined' ? false : String(pinned).toLowerCase() === 'true'
   const resolvedQuantity = typeof quantity === 'undefined' ? 1 : quantity
   const params: any = {
     quantity: parseFloat(resolvedQuantity),
     isPinned,
     item: {
-      link: resolvedLinkChild
+      link: linkableChildReference ? canonicalChildLink : resolvedLinkChild
     }
   }
 
@@ -589,7 +622,10 @@ export async function addBomItem({
     const response = await httpRequest({
       method: 'POST',
       url: `${APS_BASE(tenant)}${resolvedLinkParent}/bom-items`,
-      body: params
+      body: params,
+      headers: linkableChildReference
+        ? { 'content-location': linkableChildReference.link }
+        : undefined
     })
 
     const resolvedStatus = Number(response?.status)
@@ -653,13 +689,15 @@ export async function updateBomItem({
 
   const resolvedLinkParent = typeof linkParent !== 'undefined' ? linkParent : `/api/v3/workspaces/${wsIdParent}/items/${dmsIdParent}`
   const resolvedLinkChild = typeof linkChild !== 'undefined' ? linkChild : `/api/v3/workspaces/${wsIdChild}/items/${dmsIdChild}`
+  const linkableChildReference = parseLinkableItemPath(resolvedLinkChild)
+  const canonicalChildLink = `/api/v3/workspaces/${wsIdChild}/items/${dmsIdChild}`
   const isPinned = typeof pinned === 'undefined' ? false : String(pinned).toLowerCase() === 'true'
   const resolvedQuantity = typeof quantity === 'undefined' ? 1 : quantity
   const params: any = {
     quantity: parseFloat(resolvedQuantity),
     isPinned,
     item: {
-      link: resolvedLinkChild
+      link: linkableChildReference ? canonicalChildLink : resolvedLinkChild
     }
   }
 
@@ -683,7 +721,10 @@ export async function updateBomItem({
     const response = await httpRequest({
       method: 'PATCH',
       url: `${APS_BASE(tenant)}${resolvedLinkParent}/bom-items/${edgeId}`,
-      body: params
+      body: params,
+      headers: linkableChildReference
+        ? { 'content-location': linkableChildReference.link }
+        : undefined
     })
 
     const resolvedStatus = Number(response?.status)

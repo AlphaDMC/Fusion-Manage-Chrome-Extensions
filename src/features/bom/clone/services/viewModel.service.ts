@@ -633,7 +633,10 @@ export function buildStructureViewModel(snapshot: BomCloneStateSnapshot): CloneS
 
 export function buildOperationCounts(
   snapshot: BomCloneStateSnapshot,
-  structureViewModel: Pick<CloneStructureViewModel, 'existingTopLevelNodeIds' | 'stagedTopLevelNodeIds' | 'selectedRows' | 'selectedNodeIds'>
+  structureViewModel: Pick<
+    CloneStructureViewModel,
+    'existingTopLevelNodeIds' | 'stagedTopLevelNodeIds' | 'selectedRows' | 'selectedNodeIds' | 'targetExistingNodeIds'
+  >
 ): CloneOperationCounts {
   const markedDeleteIds = new Set(snapshot.targetMarkedForDeleteNodeIds)
   const deleteCount = snapshot.targetMarkedForDeleteNodeIds.length
@@ -650,6 +653,7 @@ export function buildOperationCounts(
   const updateCount = structureViewModel.selectedRows.reduce((count, row) => {
     if (row.level < 0) return count
     if (row.node.stagedOperationDraft) return count
+    if (!structureViewModel.targetExistingNodeIds.has(row.id)) return count
     if (!String(row.node.bomEdgeId || '').trim()) return count
     if (markedDeleteIds.has(row.id)) return count
     const hasItemOverride = Boolean(snapshot.targetItemNumberOverrides[row.id])
@@ -751,7 +755,7 @@ export function buildEditPanelViewModel(
   }
   const quantityFieldId = resolveQuantityFieldId(snapshot)
   const fallbackQuantity = String(baseNodeForEdit?.quantity || '').trim()
-    || (isOperationDraft ? '1.0' : DEFAULT_CLONE_QUANTITY)
+    || '1.0'
   const effectiveQuantity = String(snapshot.targetQuantityOverrides[nodeId] ?? baseNodeForEdit?.quantity ?? '').trim() || fallbackQuantity
   const activeInsertDraft = {
     payload: new Map(Object.entries(currentOverrides)),
@@ -895,5 +899,3 @@ export function buildLinkableDialogViewModel(
     visibleCount: visibleItems.length
   }
 }
-
-

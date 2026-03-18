@@ -745,5 +745,3 @@ export function createCloneStructureFlow(options: StructureFlowOptions): {
 
   return { buildStructureHandlers, expandAllOnOpen }
 }
-
-

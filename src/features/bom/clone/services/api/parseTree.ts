@@ -277,6 +277,23 @@ function readItemNumber(edge: Record<string, unknown>, fallback = ''): string {
   return fallback
 }
 
+function readEdgeQuantity(edge: Record<string, unknown>, edgeFields: Array<Record<string, unknown>>, fallback = ''): string {
+  const directCandidates = [
+    edge.formattedQuantity,
+    edge.quantity,
+    edge.qty,
+    edge.totalQuantity,
+  ]
+  for (const candidate of directCandidates) {
+    const value = asDisplayString(candidate).trim()
+    if (value) return value
+  }
+
+  const fieldValue = asDisplayString(readFieldValueByMetaId(edgeFields, ['103'])).trim()
+  if (fieldValue) return fieldValue
+  return fallback
+}
+
 function createNodeFromPayload(
   nodeId: string,
   item: Record<string, unknown>,
@@ -402,7 +419,7 @@ export function toBomTree(payload: unknown): BomCloneNode[] {
       }
 
       child.itemNumber = readItemNumber(edge, child.itemNumber)
-      const edgeQuantity = asDisplayString(readFieldValueByMetaId(edgeFields, ['103']))
+      const edgeQuantity = readEdgeQuantity(edge, edgeFields, child.quantity)
       if (edgeQuantity) child.quantity = edgeQuantity
       child.unitOfMeasure ||= asDisplayString(readFieldValueByMetaId(edgeFields, ['104']))
       if (Object.keys(edgeFieldValues).length > 0) {
@@ -480,7 +497,7 @@ export function toBomTree(payload: unknown): BomCloneNode[] {
         iconHtml: '',
         revision: '',
         status: '',
-        quantity: asDisplayString(readFieldValueByMetaId(edgeFields, ['103'])),
+        quantity: readEdgeQuantity(edge, edgeFields),
         unitOfMeasure: '',
         isPinned: edgePinned,
         ...(Object.keys(edgeFieldValues).length > 0 ? { bomFieldValues: edgeFieldValues } : {}),
@@ -495,7 +512,7 @@ export function toBomTree(payload: unknown): BomCloneNode[] {
           ...(existing.bomFieldValues || {}),
           ...edgeFieldValues
         }
-        if (!existing.quantity) existing.quantity = asDisplayString(readFieldValueByMetaId(edgeFields, ['103']))
+        if (!existing.quantity) existing.quantity = readEdgeQuantity(edge, edgeFields)
         existing.isPinned = edgePinned
       }
     }
@@ -531,5 +548,4 @@ export function toBomTree(payload: unknown): BomCloneNode[] {
 
   return [hydrateTreeLoadState(nodeMap.get(rootId) || rootNode)]
 }
-
 

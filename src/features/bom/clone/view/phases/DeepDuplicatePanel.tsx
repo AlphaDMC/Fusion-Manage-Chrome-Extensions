@@ -76,7 +76,7 @@ export function DeepDuplicatePanel(props: DeepDuplicatePanelProps): React.JSX.El
             />
             {snapshot.projectId && sanitizedPreview && (
               <span style={{ fontSize: '11px', color: '#526176' }}>
-                Item numbers will be suffixed with <strong>{sanitizedPreview}</strong>
+                Item numbers will be suffixed with <strong>-{sanitizedPreview}</strong>
               </span>
             )}
           </label>

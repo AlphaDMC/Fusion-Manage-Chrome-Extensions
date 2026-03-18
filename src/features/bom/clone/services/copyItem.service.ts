@@ -23,6 +23,21 @@ function fieldIdFromSelf(self: unknown): string | null {
   return last?.trim() || null
 }
 
+function resolveFieldId(fieldRecord: Record<string, unknown>): string | null {
+  const directFieldId = typeof fieldRecord.fieldId === 'string' && fieldRecord.fieldId.trim()
+    ? fieldRecord.fieldId.trim()
+    : null
+  if (directFieldId) return directFieldId
+
+  const fromSelf = fieldIdFromSelf(fieldRecord.__self__)
+  if (fromSelf) return fromSelf
+
+  const fromLink = fieldIdFromSelf(fieldRecord.link)
+  if (fromLink) return fromLink
+
+  return null
+}
+
 function stringifyValue(value: unknown): string | null {
   if (value === null || value === undefined) return null
   if (typeof value === 'string') return value.trim() || null
@@ -39,30 +54,56 @@ export type CopyableField = { fieldId: string; value: string }
 export function extractCopyableFields(payload: unknown): CopyableField[] {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return []
   const root = payload as Record<string, unknown>
-  const sections = Array.isArray(root.sections) ? root.sections : []
   const seen = new Set<string>()
   const result: CopyableField[] = []
 
-  for (const section of sections) {
-    if (!section || typeof section !== 'object' || Array.isArray(section)) continue
-    const sectionRecord = section as Record<string, unknown>
-    const fields = Array.isArray(sectionRecord.fields) ? sectionRecord.fields : []
+  const collectField = (field: unknown): void => {
+    if (!field || typeof field !== 'object' || Array.isArray(field)) return
+    const fieldRecord = field as Record<string, unknown>
+    const fieldId = resolveFieldId(fieldRecord)
+    if (!fieldId) return
+    if (SKIP_FIELD_IDS.has(fieldId.toUpperCase())) return
+    if (seen.has(fieldId)) return
 
+    const value = stringifyValue(fieldRecord.value)
+    if (value === null) return
+
+    seen.add(fieldId)
+    result.push({ fieldId, value })
+  }
+
+  const collectFieldArray = (fields: unknown): void => {
+    if (!Array.isArray(fields)) return
     for (const field of fields) {
-      if (!field || typeof field !== 'object' || Array.isArray(field)) continue
-      const fieldRecord = field as Record<string, unknown>
-      const fieldId = fieldIdFromSelf(fieldRecord.__self__)
-      if (!fieldId) continue
-      if (SKIP_FIELD_IDS.has(fieldId.toUpperCase())) continue
-      if (seen.has(fieldId)) continue
-
-      const value = stringifyValue(fieldRecord.value)
-      if (value === null) continue
-
-      seen.add(fieldId)
-      result.push({ fieldId, value })
+      collectField(field)
     }
   }
+
+  const collectSections = (sections: unknown): void => {
+    if (!Array.isArray(sections)) return
+    for (const section of sections) {
+      if (!section || typeof section !== 'object' || Array.isArray(section)) continue
+      const sectionRecord = section as Record<string, unknown>
+      collectFieldArray(sectionRecord.fields)
+    }
+  }
+
+  const collectFromRoot = (candidate: unknown): void => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return
+    const record = candidate as Record<string, unknown>
+    collectSections(record.sections)
+    collectFieldArray(record.fields)
+    collectFieldArray(record.viewfields)
+    collectFieldArray(record.viewFields)
+
+    const derived = record.derived
+    if (derived && typeof derived === 'object' && !Array.isArray(derived)) {
+      collectSections((derived as Record<string, unknown>).sections)
+    }
+  }
+
+  collectFromRoot(root)
+  collectFromRoot(root.data)
 
   return result
 }

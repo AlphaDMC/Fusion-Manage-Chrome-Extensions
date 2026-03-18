@@ -356,6 +356,11 @@ function StructureRow(props: {
 }): React.JSX.Element {
   const { row, index, context, dropState, onSetDropState, onMarkDropped, droppedRowId } = props
   const { snapshot, structureContext, handlers, isSource } = context
+  const [qtyDraft, setQtyDraft] = useState<string | null>(null)
+
+  useEffect(() => {
+    setQtyDraft(null)
+  }, [row.id])
 
   if (row.level < 0) {
     return (
@@ -389,7 +394,7 @@ function StructureRow(props: {
     && (
       structureContext.targetExistingNodeIds.has(row.id)
       || (targetItemId !== null && context.targetPreExistingItemIds.has(targetItemId))
-      || Boolean(String(originalTargetNode?.bomEdgeId || row.node.bomEdgeId || '').trim())
+      || Boolean(String(originalTargetNode?.bomEdgeId || '').trim())
     )
   const isNewlyStagedTargetRow = !isSource
     && !isPersistedTargetRow
@@ -443,8 +448,11 @@ function StructureRow(props: {
   const showAssemblyIconBox = showTreeIconBox && row.hasChildren
   const showPartIconBox = showTreeIconBox && !row.hasChildren
   const effectiveNumber = isSource ? row.node.itemNumber : snapshot.targetItemNumberOverrides[row.id] ?? row.node.itemNumber ?? ''
-  const defaultQty = row.node.stagedOperationDraft ? '1.0' : '0.0'
-  const effectiveQty = String(snapshot.targetQuantityOverrides[row.id] ?? row.node.quantity ?? '').trim() || defaultQty
+  const defaultQty = String(row.node.quantity || '').trim() || '1.0'
+  const committedQty = hasQtyOverride
+    ? String(snapshot.targetQuantityOverrides[row.id] ?? '')
+    : String(row.node.quantity ?? '').trim()
+  const effectiveQty = qtyDraft !== null ? qtyDraft : (committedQty || defaultQty)
   const sourceStatus = resolveSourceStatus(row.id, structureContext.targetTableNodeIds, hasQtyOverride, structureContext.sourceStatusByNodeId)
   const sourceDiscrepancy = structureContext.sourceDiscrepancyByNodeId[row.id] || {
     severity: 'none',
@@ -560,7 +568,7 @@ function StructureRow(props: {
           />
         )
         actions.push(needsOperationSelection ? <span key="add-remaining-wrap" className="plm-extension-bom-structure-action-tooltip-host" title="Select process first">{button}</span> : button)
-      } else if (sourceStatus === 'not-added') {
+      } else if (sourceStatus === 'not-added' || (isSourceTopLevel && !structureContext.selectedNodeIds.has(row.id))) {
         const button = (
           <StructureActionButton
             key="add"
@@ -936,20 +944,23 @@ function StructureRow(props: {
             value={effectiveQty}
             data-plm-focus-key={`target-qty-${row.id}`}
             onMouseDown={(event) => event.stopPropagation()}
+            onFocus={() => setQtyDraft(committedQty || defaultQty)}
             onDragStart={(event) => {
               event.preventDefault()
               event.stopPropagation()
             }}
             onChange={(event) => {
               const sanitized = event.currentTarget.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
-              handlers.onEditTargetQuantity(row.id, sanitized)
+              setQtyDraft(sanitized)
             }}
             onBlur={(event) => {
-              if (!String(event.currentTarget.value || '').trim()) handlers.onEditTargetQuantity(row.id, defaultQty)
+              const sanitized = event.currentTarget.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1').trim()
+              handlers.onEditTargetQuantity(row.id, sanitized || defaultQty)
+              setQtyDraft(null)
             }}
           />
         ) : (
-          isSource ? (String(row.node.quantity || '').trim() || '0.0') : effectiveQty
+          isSource ? (String(row.node.quantity || '').trim() || '-') : effectiveQty
         )}
       </td>
       <td className="plm-extension-bom-structure-action-cell">

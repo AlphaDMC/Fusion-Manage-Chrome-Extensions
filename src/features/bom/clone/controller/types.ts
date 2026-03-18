@@ -28,5 +28,3 @@ export type CloneControllerRefs = {
   getLinkableSearchDebounceTimer: () => number | null
   setLinkableSearchDebounceTimer: (next: number | null) => void
 }
-
-
